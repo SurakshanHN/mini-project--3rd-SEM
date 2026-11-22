@@ -25,6 +25,24 @@ Households cannot shift or manage their electricity load if they cannot anticipa
 
 ---
 
+## Data and EDA findings
+
+- **Target Distribution (`Appliances`):**
+  - Across the 19,735 observations, whole-house appliance electricity consumption exhibits a mean of 97.694958 Wh, a median of 60.000000 Wh, and a maximum of 1080.000000 Wh.
+  - The distribution appears heavily right-skewed; readings above 500 Wh account for only 288 out of 19,735 total intervals (1.46%). This indicates that high-load spikes are comparatively infrequent events occurring above a lower baseline demand.
+- **Diurnal Profiles (Weekday vs. Weekend):**
+  - Hourly mean profiles suggest distinct diurnal patterns:
+    - **Weekday Peak:** hour 18 at 194.89 Wh; **Weekday Minimum:** hour 3 at 48.10 Wh.
+    - **Weekend Peak:** hour 18 at 178.55 Wh; **Weekend Minimum:** hour 2 at 48.11 Wh.
+  - Weekend midday consumption tends to remain elevated relative to weekday daytime levels, which is consistent with daytime domestic presence.
+- **Correlations with `Appliances`:**
+  - Environmental sensor and weather features show weak linear correlations with `Appliances` (all $|r| < 0.2$). The strongest observed correlations among sensor and weather variables are `RH_out` ($r = -0.152$), `T2` ($r = 0.120$), and `T6` ($r = 0.118$). This suggests that ambient weather alone may offer limited direct linear explanatory power for appliance consumption, which appears more likely governed by occupant routines.
+  - The synthetic noise features `rv1` and `rv2` are identical ($rv1 = rv2$) and exhibit an $r$ of approximately -0.011 ($-0.011145$) with `Appliances`, serving as a negative control.
+- **Exclusion of `lights`:**
+  - Although `lights` displays the highest positive correlation with `Appliances` ($r = 0.197278$, or about 0.1973), it is excluded for deployment feasibility reasons rather than data leakage. Typical residential settings lack dedicated sub-metered lighting telemetry at deployment, making reliance on this input impractical for general consumer setups.
+
+---
+
 ## 2. Sensor Clarifications & Feature Exclusions
 
 - **Indoor Sensors:**
@@ -32,7 +50,7 @@ Households cannot shift or manage their electricity load if they cannot anticipa
   - Relative Humidities: `RH_1`–`RH_5`, `RH_7`–`RH_9` (8 interior zones).
 - **Outdoor Sensors:**
   - `T6` (temperature) and `RH_6` (humidity) are outdoor sensors mounted on the north facade of the house.
-  - They correlate strongly with local weather station observations over the full dataset:
+  - Over the full dataset, T6 tracks T_out very closely (r = 0.9748); RH_6 tracks RH_out moderately (r = 0.7186):
     - **Pearson $r(T_6, T_{\text{out}}) = 0.9748$**
     - **Pearson $r(\text{RH}_6, \text{RH}_{\text{out}}) = 0.7186$**
   - Weather station readings: `T_out`, `Press_mm_hg`, `RH_out`, `Windspeed`, `Visibility`, `Tdewpoint`.
@@ -45,7 +63,7 @@ Households cannot shift or manage their electricity load if they cannot anticipa
 
 ## 3. Consolidated Baseline Results Table
 
-All figures are quoted directly from [baseline_results.csv](file:///home/unhealthycoder/Borderland/miniproject-3rdSEM/appliance-forecast/outputs/baseline_results.csv) (training target mean $\bar{y}_{\text{train}} = 98.78$ Wh):
+All figures are quoted directly from [baseline_results.csv](outputs/baseline_results.csv) (training target mean $\bar{y}_{\text{train}} = 98.78$ Wh):
 
 | Horizon | Baseline Model | Val MAE (Wh) | Val RMSE (Wh) | Val R² | Test MAE (Wh) | Test RMSE (Wh) | Test R² |
 |---|---|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -74,10 +92,10 @@ At $h=6$, persistence has lower test MAE than the hour-of-day baseline (**46.37 
 
 1. **Persistence Dominates at 10 Minutes ($h=1$):**  
    At $h=1$, persistence achieves a Test MAE of 26.75 Wh and an $R^2$ of 0.4590, cutting the test MAE of the naive train mean (52.83 Wh) nearly in half. Total whole-house consumption exhibits short-term temporal autocorrelation because household activities span multiple consecutive 10-minute intervals. Beating persistence at $h=1$ provides a stringent benchmark for Review 2 models.
-2. **Empirical Verification of the "Spike Carried Forward" Phenomenon ($h=6$ vs. $h=1$):**  
+2. **Evidence Consistent with a 'Spike Carried Forward' Explanation ($h=6$ vs. $h=1$):**  
    - At $h=1$, for test rows where $\text{Appliances}(t) \ge 300$ Wh (134 rows), consumption 10 minutes later remains elevated with a **median of 290.00 Wh** and a **mean of 329.55 Wh**. Only **2.99% (4 / 134)** drop below 100 Wh, and only **17 spikes** are missed from baseline.  
    - In contrast, at $h=6$, when a spike ($\ge 300$ Wh, 133 rows) is carried forward, median consumption 1 hour later falls sharply to **130.00 Wh** (mean: **186.24 Wh**), with **21.05% (28 / 133)** of rows dropping below 100 Wh back toward baseline. Furthermore, persistence completely misses **50 spikes** where usage jumped from $< 100$ Wh at time $t$ to $\ge 300$ Wh at $t+6$.  
-   - Because squared error squares these large individual discrepancies ($> 150$ Wh residuals), carrying spikes forward and missing newly ignited spikes heavily inflates RMSE to **101.76 Wh** and drives $R^2$ negative (**-0.2520**), even while test MAE (**46.37 Wh**) beats the train mean (**52.85 Wh**).
+   - Because squared error squares these large individual discrepancies (each of the 28 faded spikes and 50 missed onsets, 78 of 2,955 test rows or 2.6%, has an absolute persistence error above 200 Wh), carrying spikes forward and missing newly ignited spikes is consistent with inflating RMSE to **101.76 Wh** and drives $R^2$ negative (**-0.2520**), even while test MAE (**46.37 Wh**) beats the train mean (**52.85 Wh**).
 3. **Consistency of Same-Time-Yesterday Across Horizons:**  
    The same-time-yesterday baseline produces near-identical results at $h=1$ (Test MAE: 52.51 Wh, RMSE: 109.49 Wh) and $h=6$ (Test MAE: 52.59 Wh, RMSE: 109.58 Wh). For any given target timestamp $T$, the prediction is identically the observed reading from 24 hours earlier ($T - 24\text{h}$). The slight numerical variation is solely due to dropping 5 additional boundary rows in the $h=6$ evaluation split (2,960 rows for $h=1$ vs. 2,955 rows for $h=6$).
 4. **Baseline Trade-Off at 1 Hour ($h=6$):**  
@@ -89,14 +107,14 @@ At $h=6$, persistence has lower test MAE than the hour-of-day baseline (**46.37 
 
 - **Feature Engineering Pipeline:**
   - *Calendar & Diurnal:* Hour-of-day cyclical encoding ($\sin(2\pi \cdot \text{hour}/24)$, $\cos(2\pi \cdot \text{hour}/24)$), day of week (0–6), and weekend binary flag.
-  - *Autoregressive Lags:* Past consumption lags at $t-1, t-2, t-3, t-6$ (1 hour prior), and $t-144$ (24 hours prior).
-  - *Rolling Statistics:* Shifted rolling means of consumption over 1h, 3h, and 6h windows, computed strictly from historical values (using `shift(1)`) to avoid data leakage.
+  - *Autoregressive Lags:* Appliances(t) (lag 0), past consumption lags at $t-1, t-2, t-3, t-6$ (1 hour prior), and $t-144$ (24 hours prior).
+  - *Rolling Statistics:* Shifted rolling means of consumption over 1h, 3h, and 6h windows, computed over windows that end at time t (past and present values only) to avoid data leakage.
   - *Thermal & Weather Gradients:* Indoor-minus-outdoor temperature differences (e.g., average indoor temperature minus outdoor $T_6$ or $T_{\text{out}}$) and weather telemetry gradients.
 - **Model Exploration (Four Candidates):**
   1. *Ridge Regression:* Regularized linear model serving as an interpretable parametric baseline.
   2. *Random Forest Regressor:* Non-linear bagging ensemble capable of handling feature interactions.
   3. *Gradient Boosted Decision Trees (LightGBM or XGBoost):* Efficient, high-performance boosting on tabular time-series features.
-  4. *Small Tuned Winner:* A compact, hyperparameter-tuned model chosen from the top candidate, optimized for generalization without overfitting.
+  4. *Small Tuned Winner:* A compact, hyperparameter-tuned model chosen from the top candidate, tuned on the validation split only.
 - **Target Transformation:**
   - Train models on $\log(1 + y)$ (`log1p(Appliances)`) to stabilize the right-skewed distribution, and invert with $\text{expm1}$ for evaluation on the original Wh scale.
 - **Evaluation Metrics & Benchmarking:**
@@ -125,7 +143,7 @@ At $h=6$, persistence has lower test MAE than the hour-of-day baseline (**46.37 
   - Presentation of prototype forecast alert mockups.
   - Evaluation of clarity, perceived usefulness, and willingness to act upon notifications.
 - **Logging & Data Management:**
-  - Interactions are recorded in [interaction_log.csv](file:///home/unhealthycoder/Borderland/miniproject-3rdSEM/appliance-forecast/field/interaction_log.csv) with columns: `date,household_label,consent_given,what_i_showed,what_they_said,what_i_changed_in_project`.
+  - Interactions are recorded in [interaction_log.csv](field/interaction_log.csv) with columns: `date,household_label,consent_given,what_i_showed,what_they_said,what_i_changed_in_project`.
 - **Current Status:**
   - **No field findings exist yet. None are invented.**
 
@@ -133,11 +151,12 @@ At $h=6$, persistence has lower test MAE than the hour-of-day baseline (**46.37 
 
 ## 7. Limitations
 
-1. **Single House in Belgium:** Data is collected from a single detached residence in Stambruges, Belgium. Building construction, climate, appliance stock, and lifestyle patterns differ considerably from Indian households.
+1. **Single House in Belgium:** Data is collected from a single house in Belgium (Stambruges, per Candanedo et al., 2017). Building construction, climate, appliance stock, and lifestyle patterns are likely to differ from Indian households.
 2. **Limited Seasonal Window:** The dataset spans roughly 4.5 months (January 11 to May 27, 2016), covering winter into late spring. Summer and autumn dynamics (such as seasonal cooling loads) are not captured.
 3. **Whole-House Aggregate Consumption Only:** The target is total household electricity draw (`Appliances`, Wh). Individual appliances or sub-circuits are not metered separately.
 4. **Absence of Tariff Data:** The dataset contains no electricity pricing, time-of-use tariffs, or demand charges.
 5. **Absence of Occupancy Logs:** No ground-truth occupancy counts, room-by-room presence indicators, or occupant activity logs are available.
+6. **Short evaluation windows:** validation and test are each about three weeks (2,960 and 2,961 rows), so metrics are noisy; for example, persistence at h=6 has val MAE 51.58 Wh but test MAE 46.37 Wh.
 
 ---
 
@@ -148,7 +167,7 @@ At $h=6$, persistence has lower test MAE than the hour-of-day baseline (**46.37 
 $R^2$ compares the model's sum of squared residuals ($\text{SS}_{\text{res}}$) against the total variance around the test set mean ($\text{SS}_{\text{tot}}$):
 $$R^2 = 1 - \frac{\text{SS}_{\text{res}}}{\text{SS}_{\text{tot}}} = 1 - \frac{\sum (y_i - \hat{y}_i)^2}{\sum (y_i - \bar{y})^2}$$
 Predicting the constant mean achieves $R^2 \approx 0$. When a model's sum of squared residuals exceeds the variance of the data ($\text{SS}_{\text{res}} > \text{SS}_{\text{tot}}$), $R^2$ becomes negative.  
-Empirical analysis of the test set reveals that when an elevated consumption spike ($\ge 300$ Wh) occurs at time $t$, persistence predicts that same elevated level 1 hour later at $t+6$. However, 60 minutes later, median consumption drops sharply to **130.00 Wh** (mean: **186.24 Wh**), and **21.05% (28 / 133)** of rows have fallen below 100 Wh back toward baseline. Furthermore, persistence completely misses **50 spikes** where consumption jumped from $< 100$ Wh to $\ge 300$ Wh. Because squared-error loss squares these large residuals ($> 150$ Wh), carrying spikes forward and missing newly ignited spikes heavily inflates $\text{SS}_{\text{res}}$, driving $R^2$ to **-0.2520** and RMSE to **101.76 Wh** (worse than the train mean's **90.96 Wh**). Meanwhile, MAE evaluates errors linearly, so persistence still beats the train mean on MAE (**46.37 Wh** vs. **52.85 Wh**).
+Empirical analysis of the test set reveals that when an elevated consumption spike ($\ge 300$ Wh) occurs at time $t$, persistence predicts that same elevated level 1 hour later at $t+6$. However, 60 minutes later, median consumption drops sharply to **130.00 Wh** (mean: **186.24 Wh**), and **21.05% (28 / 133)** of rows have fallen below 100 Wh back toward baseline. Furthermore, persistence completely misses **50 spikes** where consumption jumped from $< 100$ Wh to $\ge 300$ Wh. Because squared-error loss squares these large residuals (each of the 28 faded spikes and 50 missed onsets, 78 of 2,955 test rows or 2.6%, has an absolute persistence error above 200 Wh), carrying spikes forward and missing newly ignited spikes is consistent with inflating $\text{SS}_{\text{res}}$, driving $R^2$ to **-0.2520** and RMSE to **101.76 Wh** (worse than the train mean's **90.96 Wh**). Meanwhile, MAE evaluates errors linearly, so persistence still beats the train mean on MAE (**46.37 Wh** vs. **52.85 Wh**).
 
 ### Question 2: Why does "same-time-yesterday" score so poorly ($R^2 \approx -0.45$)?
 **Answer:**  
@@ -164,7 +183,7 @@ Time-series telemetry violates the independent and identically distributed (i.i.
 
 ### Question 4: Why are $T_6$ and $RH_6$ separated from indoor sensors?
 **Answer:**  
-Per the UCI variable table, $T_6$ and $RH_6$ are sensors mounted on the exterior north facade of the building. Indoor sensors comprise $T_1$–$T_5$, $T_7$–$T_9$ and $RH_1$–$RH_5$, $RH_7$–$RH_9$. Over the full dataset, $T_6$ and $RH_6$ correlate strongly with the weather station readings ($r = 0.9748$ for $T_6$ vs. $T_{\text{out}}$; $r = 0.7186$ for $\text{RH}_6$ vs. $\text{RH}_{\text{out}}$).
+Per the UCI variable table, $T_6$ and $RH_6$ are sensors mounted on the exterior north facade of the building. Indoor sensors comprise $T_1$–$T_5$, $T_7$–$T_9$ and $RH_1$–$RH_5$, $RH_7$–$RH_9$. Over the full dataset, T6 tracks T_out very closely (r = 0.9748); RH_6 tracks RH_out moderately (r = 0.7186).
 
 ### Question 5: Why is `lights` excluded if its value at time $t$ is already known?
 **Answer:**  
