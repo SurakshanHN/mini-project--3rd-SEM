@@ -1,0 +1,9 @@
+Horizon,Baseline,Val_MAE,Val_RMSE,Val_R2,Test_MAE,Test_RMSE,Test_R2
+h=1 (10-min),Persistence,26.16,66.44,0.4813,26.75,66.85,0.459
+h=1 (10-min),Same Time Yesterday,53.32,115.4,-0.5647,52.51,109.49,-0.4513
+h=1 (10-min),Train-Mean,53.98,92.41,-0.0034,52.83,90.9,-0.0004
+h=1 (10-min),"Mean by (hour, is_weekend)",48.51,87.23,0.106,47.9,85.75,0.1098
+h=6 (1-hour),Persistence,51.58,111.45,-0.4609,46.37,101.76,-0.252
+h=6 (1-hour),Same Time Yesterday,53.24,115.38,-0.5657,52.59,109.58,-0.4519
+h=6 (1-hour),Train-Mean,53.94,92.38,-0.0036,52.85,90.96,-0.0004
+h=6 (1-hour),"Mean by (hour, is_weekend)",48.47,87.21,0.1057,47.97,85.82,0.1095
