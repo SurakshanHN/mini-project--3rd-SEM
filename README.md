@@ -71,15 +71,13 @@ appliance-forecast/
 
 ### Environment Setup
 ```bash
-# 1. Clone repository & navigate to root
-cd appliance-forecast
+cd mini project- 3rd SEM
 
-# 2. Create and activate a local virtual environment
+# Create and activate a local virtual environment
 python -m venv .venv
 source .venv/bin/activate       # On Linux / macOS
 # .venv\Scripts\activate        # On Windows
 
-# 3. Install dependencies
 pip install -r requirements.txt
 ```
 
