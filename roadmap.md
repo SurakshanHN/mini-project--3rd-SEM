@@ -10,161 +10,94 @@
 
 | When | Goal |
 |---|---|
-| Sun 22 Nov (today) | Load data, run EDA, compute persistence baseline, prepare Review 1 points, message 6-8 households |
-| Mon 23 Nov | **Review 1** (3:30pm), then start feature work |
+| Sun 22 Nov | Load data, run EDA, compute persistence baseline, prepare Review 1 points, prepare field outreach |
+| Mon 23 Nov | **Review 1** (completed), then start feature work |
 | Tue 24 - Wed 25 Nov | Features, models, evaluation, get ready for Review 2 |
 | Thu 26 Nov | **Review 2**, plus first round of household conversations |
-| Fri 27 - Sat 28 Nov | Deploy the app, second round of conversations |
+| Fri 27 - Sat 28 Nov | Build & deploy the app, second round of conversations |
 | Sun 29 Nov | Report, notebook cleanup, demo rehearsal |
 | Mon 30 Nov | **Review 3** |
 
 ---
 
-## Step 1: Setup (today, ~1 hour)
+## Step 1: Setup
 
-- [ ] Create a GitHub repo and a Colab notebook; mount Google Drive.
-- [ ] Download `energydata_complete.csv` from the UCI page.
-- [ ] Save a copy in Drive and in the repo so the demo never depends on UCI being reachable.
+- [x] Create a GitHub repo (`SurakshanHN/mini-project--3rd-SEM`) and local workspace.
+- [x] Download `energydata_complete.csv` from the UCI page.
+- [x] Save a local copy in `data/energydata_complete.csv` so the demo never depends on UCI being reachable.
 
-## Step 2: Understand the data (today)
+## Step 2: Understand the data (Review 1)
 
-**Facts about the data**
-- 10-minute resolution, about 4.5 months in early 2016, from one house in Belgium.
-- Target is `Appliances` (Wh): heavily right-skewed with rare large spikes.
-- Indoor sensors: `T1`-`T9`, `RH_1`-`RH_9`.
-- Outdoor weather: `T_out`, `RH_out`, `Press_mm_hg`, `Windspeed`, `Visibility`, `Tdewpoint`.
-- `rv1` and `rv2` are random noise columns. Keep them only as a sanity check; a good model should ignore them.
+- [x] Check missing values (`0`) and duplicates (`0`).
+- [x] Plot the target over time (`figures/01_appliances_time_series.png`).
+- [x] Average the target by hour of day (`figures/03_mean_appliances_by_hour.png`).
+- [x] Plot correlations (`figures/04_correlation_heatmap.png`, `figures/05_correlation_with_target.png`).
+- [x] Lock forecasting framing (`y(t+h)` for `h=1` and `h=6`), exclude `lights` and `rv1`/`rv2` from main models.
 
-**Tasks**
-- [ ] Check missing values and duplicates.
-- [ ] Plot the target over time.
-- [ ] Average the target by hour of day.
-- [ ] Plot correlations.
+## Step 3: Baselines (Review 1)
 
-**Decide your framing now**
-- Your abstract says *forecast*, so predict `y(t+h)` using only information available at time `t`.
-- Pick horizons of **10 minutes** and **1 hour**.
-- Do not use sensor values from `t+h` as inputs. That leaks the future and inflates results.
-- Leave `lights` and `rv1`/`rv2` out of the main model. `lights` is also a consumption reading and may not exist in a real household setup.
+- [x] **Persistence:** `y(t+h) = y(t)` (`Test MAE: 26.75 Wh` at `h=1`, `46.37 Wh` at `h=6`).
+- [x] Same time yesterday, Train-Mean, and Mean by `(hour, is_weekend)`.
+- [x] Report Val/Test MAE, RMSE and R² (`outputs/baseline_results.csv`).
 
-## Step 3: Baselines (Review 1 material)
+## Step 4: Features (`src/features.py`)
 
-- [ ] **Persistence:** predict `y(t+h) = y(t)`.
-- [ ] Optional but cheap: same time yesterday.
-- [ ] Report MAE, RMSE and R² for both.
+- [x] Time features: `hour`, `hour_sin`, `hour_cos`, `day_of_week`, `is_weekend`.
+- [x] Lags: `Appliances` at `t`, `t-1`, `t-2`, `t-3`, `t-6` (1h), `t-144` (24h).
+- [x] Shifted rolling means: past `1h`, `3h`, `6h` computed over `[t-w .. t-1]`.
+- [x] Context: `indoor_temp_mean - T_out`, `indoor_temp_mean - T6`, indoor/outdoor humidity & weather.
+- [x] Chronological 70/15/15 split and automated anti-leakage tests (`tests/test_features.py` — 4/4 passed).
 
-This is your benchmark. Everything after is judged against it.
+## Step 5: Models (`02_features_models_eval.ipynb`)
 
-## Step 4: Features
+- [x] Ridge Regression (train-only `StandardScaler`, validation-tuned `alpha`).
+- [x] Random Forest Regressor.
+- [x] LightGBM Regressor (with validation early stopping).
+- [x] Compact validation-only tuned LightGBM winner for both horizons.
+- [x] Compare `raw` vs `log1p` target training (inverted with `expm1` before Wh evaluation).
+- [x] Report Persistence Skill Score (`1 - MAE_model / MAE_persistence`).
 
-| Type | Details |
-|---|---|
-| Time | Hour (sin/cos encoded), day of week, weekend flag |
-| Lags | Appliances at t-1, t-2, t-3, t-6 (1 hour), t-144 (24 hours) |
-| Rolling means | Past usage over 1h, 3h, 6h. Always shift them so the current target never leaks in |
-| Context | Indoor-minus-outdoor temperature, current humidity and weather |
+## Step 6: Evaluation and honest findings (Review 2)
 
-**Splitting**
-- Split **chronologically, never randomly**, e.g. 70% train / 15% validation / 15% test in time order.
-- Fit any scaler on the training portion only.
-
-## Step 5: Models (keep it to four)
-
-1. Ridge or linear regression
-2. Random Forest
-3. LightGBM or XGBoost (likely your best)
-4. Optional: a small tuned version of the winner
-
-Skip LSTMs and deep learning. With limited time, and on this dataset, they rarely beat gradient boosting by enough to matter.
-
-Because the target is skewed:
-- Compare MAE alongside RMSE.
-- Try a `log1p` transform of the target.
-- Report skill score vs persistence: `1 - MAE_model / MAE_persistence`.
-
-## Step 6: Evaluation and honest findings (Review 2 material)
-
-- [ ] Table of all models vs both baselines, at both horizons.
-- [ ] Plot predicted vs actual for a typical week.
-- [ ] Plot error by hour of day.
-- [ ] Permutation importance; check that `rv1`/`rv2` rank near the bottom.
-- [ ] Test hourly-aggregated or peak-window predictions, which are usually more predictable and more useful to a household.
-
-Expect modest scores. Published results on this dataset are not high, and your abstract already says the honest finding is that the target is hard to predict. If your model barely beats persistence at 10 minutes, say so plainly.
+- [x] Unified table of all models vs all 4 baselines at both horizons (`outputs/model_results.csv`).
+- [x] Plot predicted vs actual for a typical test week (`07`, `08`).
+- [x] Plot ML vs persistence comparison (`09`) and error by hour of day (`10`).
+- [x] Permutation importance (`11`) and `rv1`/`rv2` negative-control check (`13`).
+- [x] Spike prediction analysis (`12`) and hourly-aggregated forecasting (`14`, `outputs/hourly_results.csv`).
 
 ## Step 7: Field interaction (off the laptop)
 
-Use two rounds with real households (family, neighbours, hostel or PG residents).
+- [x] Prepare outreach message (`field/outreach_message.txt`), Round 1 questionnaire (`field/round1_questions.md`), Round 2 template (`field/round2_guide_and_template.md`), and log schema (`field/interaction_log.csv`).
+- [ ] **Round 1:** Interview 6–8 real households and log responses in `field/interaction_log.csv`.
+- [ ] **Round 2:** Show working `app.py` prototype, ask whether they would shift appliance use, and log what changed in the project.
 
-**Round 1 (before Review 2)**
-- Ask about tariffs.
-- Ask whether they know their usage pattern.
-- Ask whether they would change habits.
-- Ask what form of alert they would actually use: an hourly number, a "high-usage window" warning, or a daily summary.
+> Everything in `field/interaction_log.csv` must come from real conversations.
 
-**Round 2 (after the app works)**
-- Show them the output.
-- Ask whether they would shift appliance use because of it.
+## Step 8: Deployment (Review 3)
 
-**Interaction record**
-Log every interaction with: date, household (with consent), what you showed, what they said, **and what you changed in the project because of it**. The deliverable explicitly asks for "what changed", so let their feedback shape your output format.
+- [x] Save production models with `joblib` (`models/model_h1.joblib`, `models/model_h6.joblib`) and verify parity (`scripts/verify_models.py`).
+- [x] Build Streamlit app (`app.py`) reusing `src/features.py` and test locally (`AppTest` + headless server).
+- [x] Pin `requirements.txt`, fix `.gitignore`, and add `.streamlit/config.toml`.
+- [ ] Push final commits to GitHub (`git push origin main`).
+- [ ] Deploy free on Streamlit Community Cloud (`share.streamlit.io`) and verify public URL.
 
-> Everything in this record must come from real conversations. Evaluators will probe it.
+## Step 9: Report
 
-## Step 8: Deployment (27-28 Nov)
-
-- [ ] Save the model with `joblib`.
-- [ ] Build a small Streamlit app (`app.py`): pick a timestamp from the test period, then show the forecast, the persistence forecast and the actual, with a plot and a simple "high-usage window ahead" message.
-- [ ] Add `requirements.txt` with pinned versions.
-- [ ] Push to GitHub.
-- [ ] Deploy free on Streamlit Community Cloud or Hugging Face Spaces.
-
-**Backups for demo day**
-- A Gradio interface in Colab with `share=True` (temporary public link).
-- A short screen recording of the app working.
-
-**Notebook**
-- [ ] Make sure the Colab notebook runs top to bottom on "Restart and run all".
-- [ ] Share the link with view access.
-
-## Step 9: Report (29 Nov)
-
-Suggested structure:
-
-1. Problem and community rationale
-2. Dataset
-3. Method
-4. Results (including baseline comparison)
-5. Field interaction
-6. Limitations
-7. SDG 7 link
-
-**SDG 7.3:** say the project supports load awareness and efficiency. Do not claim measured savings, since none were measured.
-
-**Limitations to state openly**
-- Single house in Belgium
-- Short time span
-- No tariff data
+- [x] Draft complete technical report in `report.md` and update `README.md` with verified Review 2/3 results.
+- [ ] Update Section 12 of `report.md` once real Round 1 & Round 2 household logs are collected.
+- [x] Make sure `02_features_models_eval.ipynb` runs top-to-bottom cleanly (`nbconvert --execute`).
 
 ## Step 10: Demo rehearsal
 
-Run through it twice for the 3:30-3:40 slot. Ten minutes is short:
-
-| Segment | Time |
-|---|---|
-| Problem | 1 min |
-| Data | 1 min |
-| Baseline vs model result | 1 min |
-| App demo | 1 min |
-| Field findings | 1 min |
-| Questions | Remaining time |
+- [ ] Rehearse 10-minute presentation twice (Problem 1m, Data 1m, Baseline vs ML 1m, App demo 1m, Field findings 1m, Q&A).
 
 ---
 
 ## Deliverables checklist
 
-- [ ] Synopsis
-- [ ] Working ML model in Google Colab with evaluation results
-- [ ] Field interaction record (who was consulted and what changed)
-- [ ] Project report
+- [x] Synopsis (`project_synopsis.md`)
+- [x] Working ML notebook with verified evaluation results (`02_features_models_eval.ipynb`)
+- [x] Working Streamlit demo app (`app.py`) & saved `joblib` artifacts (`models/`)
+- [ ] Field interaction record (who was consulted and what changed — `field/interaction_log.csv`)
+- [x] Draft project report (`report.md` — pending final field section)
 - [ ] Final demonstration

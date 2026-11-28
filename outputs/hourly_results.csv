@@ -1,0 +1,5 @@
+Model,Val_MAE_Wh,Val_RMSE_Wh,Val_R2,Test_MAE_Wh,Test_RMSE_Wh,Test_R2
+Hourly Persistence,223.43,415.49,0.0542,187.65,357.52,0.2914
+"Hourly Mean (target hour, weekend)",252.66,387.3,0.1782,249.33,385.21,0.1774
+Hourly Ridge (val-alpha),198.19,339.1,0.3701,195.7,317.03,0.4428
+Hourly LightGBM,173.13,353.84,0.3141,166.16,332.15,0.3884
